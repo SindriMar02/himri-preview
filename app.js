@@ -46,7 +46,7 @@ function configureScroll() {
   if (lenisTick) gsap.ticker.remove(lenisTick);
   lenis?.destroy(); lenis = null; lenisTick = null;
   if (!isFine() || reduced.matches || !window.Lenis) return;
-  lenis = new window.Lenis({ lerp: 0.085, wheelMultiplier: 0.95, smoothWheel: true, syncTouch: false, autoRaf: false });
+  lenis = new window.Lenis({ lerp: 0.1, wheelMultiplier: 1, smoothWheel: true, syncTouch: false, autoRaf: false });
   lenis.on('scroll', ScrollTrigger.update);
   lenisTick = (time) => lenis.raf(time * 1000);
   gsap.ticker.add(lenisTick);
@@ -289,13 +289,18 @@ function initPageMotion({ arrival = 'none' } = {}) {
         .fromTo(img, { scale: 1.1 }, { scale: 1, duration: 3, ease: 'power3.out', immediateRender: true, clearProps: 'transform' }, 0)
         .fromTo($('.mask-in', word), { yPercent: 110 }, { yPercent: 0, duration: 1.4, ease: 'power4.out', immediateRender: true }, 0.3)
         .fromTo($('.image-caption', opening), { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.8, ease: 'power3.out', immediateRender: true, clearProps: 'all' }, 0.9);
-      gsap.timeline({ scrollTrigger: { trigger: opening, start: 'top top', end: 'bottom bottom', scrub: SCRUB(), invalidateOnRefresh: true } })
-        .fromTo(frame, { clipPath: 'inset(0px 0px 0px 0px)' }, { clipPath: endInset, ease: 'none', duration: 1 }, 0)
-        .fromTo(word, { opacity: 1, y: 0 }, { opacity: 0, y: -60, ease: 'none', duration: 0.45, immediateRender: false }, 0)
-        .fromTo(plate, { opacity: 0, x: -28 }, { opacity: 1, x: 0, ease: 'none', duration: 0.45 }, 0.5);
+      // phones: no framing scrub. The photograph stays full bleed and the statement follows it in the flow (CSS),
+      // so momentum scrolling never drives a clip-path over the whole screen
+      const phone = !matchMedia('(min-width: 768px)').matches;
+      if (!phone) {
+        gsap.timeline({ scrollTrigger: { trigger: opening, start: 'top top', end: 'bottom bottom', scrub: SCRUB(), invalidateOnRefresh: true } })
+          .fromTo(frame, { clipPath: 'inset(0px 0px 0px 0px)' }, { clipPath: endInset, ease: 'none', duration: 1 }, 0)
+          .fromTo(word, { opacity: 1, y: 0 }, { opacity: 0, y: -60, ease: 'none', duration: 0.45, immediateRender: false }, 0)
+          .fromTo(plate, { opacity: 0, x: -28 }, { opacity: 1, x: 0, ease: 'none', duration: 0.45 }, 0.5);
+      }
       // the header is transparent over the full-bleed photograph and takes its blush bar as the frame settles
       header.classList.add('over-photo');
-      ScrollTrigger.create({ trigger: opening, start: 'top top', end: '30% top', refreshPriority: -1,
+      ScrollTrigger.create({ trigger: phone ? frame : opening, start: 'top top', end: phone ? () => `bottom ${header.offsetHeight}px` : '30% top', refreshPriority: -1,
         onLeave: () => header.classList.remove('over-photo'), onEnterBack: () => header.classList.add('over-photo'),
         onRefresh: (self) => header.classList.toggle('over-photo', self.progress < 1) });
     } else header.classList.remove('over-photo');
@@ -331,7 +336,7 @@ function initPageMotion({ arrival = 'none' } = {}) {
     // the walk through the house: the copy pins while the photographs pass (desktop, fine pointer)
     const walk = $('[data-walk]', main);
     if (walk && isFine() && wide()) {
-      ScrollTrigger.create({ trigger: $('.walk-copy', walk), start: () => `top ${header.offsetHeight + 40}px`, endTrigger: $('.walk-photos', walk), end: 'bottom bottom', pin: true, pinSpacing: false, anticipatePin: 1, invalidateOnRefresh: true, refreshPriority: 1 });
+      ScrollTrigger.create({ trigger: $('.walk-copy', walk), start: () => `top ${header.offsetHeight + 40}px`, endTrigger: $('.walk-photos', walk), end: 'bottom bottom', pin: true, pinSpacing: false, invalidateOnRefresh: true, refreshPriority: 1 });
     }
   }, main);
 
@@ -367,8 +372,16 @@ function initPageMotion({ arrival = 'none' } = {}) {
   };
   main.addEventListener('focusin', onFocusIn);
   cleanups.push(() => main.removeEventListener('focusin', onFocusIn));
-  let loadFrame = 0;
-  const onLoad = () => { cancelAnimationFrame(loadFrame); loadFrame = requestAnimationFrame(refresh); };
+  // a lazy photograph arriving mid-scroll only re-measures when it actually changed the page height: every image
+  // carries its width and height, so normally nothing moves and a full refresh would only stall the glide
+  let loadFrame = 0, measuredHeight = document.documentElement.scrollHeight;
+  const onLoad = () => {
+    cancelAnimationFrame(loadFrame);
+    loadFrame = requestAnimationFrame(() => {
+      const h = document.documentElement.scrollHeight;
+      if (h !== measuredHeight) { measuredHeight = h; refresh(); }
+    });
+  };
   main.addEventListener('load', onLoad, true);
   cleanups.push(() => { cancelAnimationFrame(loadFrame); main.removeEventListener('load', onLoad, true); });
 
