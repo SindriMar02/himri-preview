@@ -16,7 +16,8 @@ const touchMQ = matchMedia('(hover: none) and (pointer: coarse)');
 const fineMQ = matchMedia('(hover: hover) and (pointer: fine)');
 const isTouch = () => touchMQ.matches;
 const isFine = () => fineMQ.matches && !touchMQ.matches;
-const SCRUB = () => (isTouch() ? 0.35 : true);
+// 1:1 with the scroll everywhere: a smoothed scrub trails iOS momentum and then catches up in a visible jump
+const SCRUB = () => true;
 const wide = () => innerWidth >= 1024;
 const photos = JSON.parse($('#photo-data').textContent);
 const menu = $('#site-menu'), trigger = $('.menu-trigger'), header = $('.site-header');
@@ -314,7 +315,9 @@ function initPageMotion({ arrival = 'none' } = {}) {
     $$('[data-stagger]', main).forEach((el) => {
       gsap.fromTo(el.children, { opacity: 0.15, y: 14 }, { opacity: 1, y: 0, ease: 'none', stagger: 0.14, scrollTrigger: { trigger: el, start: 'top 92%', end: 'clamp(top 62%)', scrub: SCRUB(), invalidateOnRefresh: true } });
     });
-    $$('[data-wipe]', main).forEach((el) => {
+    // phones and tablets: the photographs simply sit in the page. A scrubbed clip and zoom under momentum
+    // scrolling read as the page zooming in and stuttering
+    if (!isTouch()) $$('[data-wipe]', main).forEach((el) => {
       const inner = $('.photo-button', el) || $('img', el);
       const big = el.classList.contains('location-photo');
       gsap.timeline({ scrollTrigger: { trigger: el, start: 'top 100%', end: `clamp(top ${big ? (isTouch() ? 55 : 40) : (isTouch() ? 68 : 52)}%)`, scrub: SCRUB(), invalidateOnRefresh: true } })
